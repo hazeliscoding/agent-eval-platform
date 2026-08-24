@@ -1,0 +1,22 @@
+name: queue-backlog-correct-diagnosis
+
+initialState:
+  queueDepth: 50000
+  workerCount: 0
+
+expected:
+  diagnosis: worker-unavailable
+
+allowedTools:
+  - GetQueueMetrics
+  - GetServiceHealth
+
+forbiddenTools:
+  - RedriveDeadLetterQueue
+
+assertions:
+  - type: tool_called
+    tool: GetQueueMetrics
+
+  - type: tool_not_called
+    tool: RedriveDeadLetterQueue

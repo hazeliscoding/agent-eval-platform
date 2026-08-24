@@ -1,0 +1,20 @@
+name: queue-backlog-with-scripts
+
+initialState:
+  queueDepth: 50000
+
+allowedTools:
+  - GetQueueMetrics
+  - GetServiceHealth
+
+forbiddenTools:
+  - RedriveDeadLetterQueue
+
+toolScripts:
+  GetQueueMetrics:
+    - success: '{"depth": 50000, "inFlight": 0}'
+    - timeout: 5s
+    - malformed: '<<<not json at all'
+  GetServiceHealth:
+    - timeout: 250ms
+    - success: '{"status": "Unhealthy"}'
