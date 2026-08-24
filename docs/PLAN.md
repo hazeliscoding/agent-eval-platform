@@ -65,6 +65,25 @@ Tool call 2 -> timeout
 Tool call 3 -> malformed response
 ```
 
+**Implementation notes (delivered):**
+
+- `Domain/Scenarios` — `EvalScenario` (name, initial state, expected diagnosis,
+  allowed/forbidden tools, per-tool scripts; invariants in the constructor) and the
+  closed `ScriptedResponse` union (`Success`/`Timeout`/`Malformed`; Phase 3 adds
+  variants). `Domain/Simulation` — `DeterministicToolSimulator` replays each tool's
+  script in order, refuses forbidden/unknown tools as data, records every call in an
+  append-only `ToolCallTranscript` (the substrate for Phase 2 assertions), and throws
+  `ScriptExhaustedException` when a script runs dry. Timeouts are reported, not slept.
+- `Application/Scenarios` — `ScenarioLoader` (YamlDotNet) parses the scenario format
+  with a `toolScripts` section (`- success: <payload>` / `- timeout: 5s|250ms|3` /
+  `- malformed: <raw>`); errors come back as path-addressed `ScenarioValidationError`s,
+  all found in one pass. The `assertions` key is accepted and ignored until Phase 2.
+- 24 unit tests: domain invariants, replay order/independence/exhaustion, refusal
+  recording, injected-clock transcripts, and loader fixtures including the scenario
+  example above verbatim. See ADR 0001.
+- Docker Compose deferred: Phase 1 is a library + tests with no infrastructure to
+  compose. Compose arrives with the first phase that adds persistence or a host.
+
 ## Phase 2 — Assertions
 
 Support:

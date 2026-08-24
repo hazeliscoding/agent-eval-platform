@@ -17,11 +17,26 @@ Agents fail in ways unit tests don't catch — wrong tool calls, prompt injectio
 
 .NET 10 · ASP.NET Core · PostgreSQL · EF Core · Angular · OpenTelemetry · xUnit + Testcontainers
 
+## Deterministic tool simulator
+
+The Phase 1 core: scenarios are YAML — initial state, allowed/forbidden tools, expected
+diagnosis, and a script per tool (`success` / `timeout` / `malformed`, in call order).
+The simulator replays scripts deterministically, refuses forbidden and unknown tools *as
+data* (the attempt is recorded, the run continues — observing bad behavior is the point),
+and captures every call in an append-only transcript that later assertion phases read.
+Timeouts are reported, never slept, so whole suites run in milliseconds. A script that
+runs dry fails loudly rather than repeating itself. See
+[ADR 0001](docs/adr/0001-scenarios-as-data-and-deterministic-simulator.md).
+
+```bash
+dotnet test   # domain invariants, replay semantics, YAML loader fixtures
+```
+
 ## Status 🚧
 
-Planning — see [docs/PLAN.md](docs/PLAN.md) for the phased build plan.
+In progress — see [docs/PLAN.md](docs/PLAN.md) for the phased build plan.
 
-- [ ] Phase 1 — Deterministic tool simulator
+- [x] Phase 1 — Deterministic tool simulator (YAML scenarios, scripted responses, refusal-recording transcript)
 - [ ] Phase 2 — Assertions
 - [ ] Phase 3 — Fault injection
 - [ ] Phase 4 — Prompt injection testing
@@ -31,7 +46,8 @@ Planning — see [docs/PLAN.md](docs/PLAN.md) for the phased build plan.
 ## Running Locally
 
 ```bash
-docker compose up
+dotnet test
 ```
 
-(Coming with Phase 1.)
+Phase 1 is a library plus its tests — nothing to compose yet. `docker compose up`
+arrives with the first phase that adds persistence or a host.
