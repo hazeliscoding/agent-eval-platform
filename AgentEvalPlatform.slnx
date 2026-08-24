@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AgentEvalPlatform.Domain/AgentEvalPlatform.Domain.csproj" />
+    <Project Path="src/AgentEvalPlatform.Application/AgentEvalPlatform.Application.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AgentEvalPlatform.UnitTests/AgentEvalPlatform.UnitTests.csproj" />
+  </Folder>
+</Solution>
