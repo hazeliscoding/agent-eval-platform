@@ -100,6 +100,23 @@ MaximumTokenUsage
 MaximumExecutionTime
 ```
 
+**Implementation notes (delivered):**
+
+- `Domain/Runs/AgentRun` — the judgeable artifact: Phase 1 transcript + final output +
+  ordered workflow states + tokens + duration. Runner phases will produce it;
+  assertions only ever read it.
+- `Domain/Assertions` — `Assertion` closed union (all nine types above;
+  `NoUnauthorizedActions` reads the transcript's recorded refusals), `AssertionResult`
+  with observed-facts messages, and `AssertionEvaluator`. `ToolCallCount` is exact;
+  `OutputContains` is ordinal case-sensitive.
+- `ISchemaValidator` port keeps the domain dependency-free;
+  `Application/Assertions/JsonSchemaValidator` implements it with JsonSchema.Net.
+  Broken schemas blame the scenario, non-JSON output blames the agent; neither throws.
+- `ScenarioLoader` now parses the `assertions` key: snake_case `type` discriminators
+  (`tool_called`, `maximum_token_usage`, …), exact field sets — unknown types, missing
+  fields, and unexpected keys are all path-addressed errors.
+- 20 new unit tests (44 total). See ADR 0002.
+
 ## Phase 3 — Fault Injection
 
 Support:
