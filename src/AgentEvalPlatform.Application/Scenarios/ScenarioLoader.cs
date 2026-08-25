@@ -1,4 +1,5 @@
 using AgentEvalPlatform.Domain;
+using AgentEvalPlatform.Domain.Assertions;
 using AgentEvalPlatform.Domain.Scenarios;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
@@ -47,6 +48,7 @@ public sealed class ScenarioLoader
         }
 
         var scripts = ParseScripts(dto.ToolScripts, errors);
+        var assertions = ParseAssertions(dto.Assertions, errors);
 
         if (errors.Count > 0)
         {
@@ -61,7 +63,8 @@ public sealed class ScenarioLoader
                 dto.Expected?.Diagnosis,
                 dto.AllowedTools ?? [],
                 dto.ForbiddenTools ?? [],
-                scripts));
+                scripts,
+                assertions));
         }
         catch (DomainRuleException ex)
         {
@@ -141,6 +144,112 @@ public sealed class ScenarioLoader
         return scripts;
     }
 
+    /// <summary>
+    /// Parses the <c>assertions</c> list into the typed union. Each entry is a flat map
+    /// with a snake_case <c>type</c> discriminator (matching the scenario-format
+    /// examples in the plan) and exactly the fields that type requires — extra keys are
+    /// errors so a typo like <c>tools:</c> can't silently weaken a scenario.
+    /// </summary>
+    private static List<Assertion> ParseAssertions(
+        List<Dictionary<string, string>>? entries,
+        List<ScenarioValidationError> errors)
+    {
+        var assertions = new List<Assertion>();
+        if (entries is null)
+        {
+            return assertions;
+        }
+
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var path = $"assertions[{i}]";
+            var entry = entries[i];
+            if (!entry.TryGetValue("type", out var type))
+            {
+                errors.Add(new ScenarioValidationError(path, "Each assertion requires a 'type' field."));
+                continue;
+            }
+
+            var before = errors.Count;
+            Assertion? assertion = type switch
+            {
+                "tool_called" => Fields(entry, path, errors, "tool") is [var tool]
+                    ? new Assertion.ToolCalled(tool) : null,
+                "tool_not_called" => Fields(entry, path, errors, "tool") is [var tool]
+                    ? new Assertion.ToolNotCalled(tool) : null,
+                "tool_call_count" => Fields(entry, path, errors, "tool", "count") is [var tool, var count]
+                    ? ParseCount(tool, count, path, errors) : null,
+                "output_contains" => Fields(entry, path, errors, "text") is [var text]
+                    ? new Assertion.OutputContains(text) : null,
+                "output_matches_schema" => Fields(entry, path, errors, "schema") is [var schema]
+                    ? new Assertion.OutputMatchesSchema(schema) : null,
+                "workflow_reached_state" => Fields(entry, path, errors, "state") is [var state]
+                    ? new Assertion.WorkflowReachedState(state) : null,
+                "no_unauthorized_actions" => Fields(entry, path, errors) is not null
+                    ? new Assertion.NoUnauthorizedActions() : null,
+                "maximum_token_usage" => Fields(entry, path, errors, "tokens") is [var tokens]
+                    ? ParseTokens(tokens, path, errors) : null,
+                "maximum_execution_time" => Fields(entry, path, errors, "duration") is [var duration]
+                    ? ParseMaxDuration(duration, path, errors) : null,
+                _ => AddError(errors, path, $"Unknown assertion type '{type}'."),
+            };
+
+            if (assertion is not null && errors.Count == before)
+            {
+                assertions.Add(assertion);
+            }
+        }
+
+        return assertions;
+    }
+
+    /// <summary>
+    /// Returns the values of <paramref name="required"/> in order, or null after
+    /// reporting missing/unexpected keys. 'type' is always permitted.
+    /// </summary>
+    private static string[]? Fields(
+        Dictionary<string, string> entry,
+        string path,
+        List<ScenarioValidationError> errors,
+        params string[] required)
+    {
+        var ok = true;
+        foreach (var key in required.Where(k => !entry.ContainsKey(k)))
+        {
+            errors.Add(new ScenarioValidationError(path, $"Assertion is missing required field '{key}'."));
+            ok = false;
+        }
+
+        foreach (var key in entry.Keys.Where(k => k != "type" && !required.Contains(k, StringComparer.Ordinal)))
+        {
+            errors.Add(new ScenarioValidationError(path, $"Assertion has unexpected field '{key}'."));
+            ok = false;
+        }
+
+        return ok ? required.Select(k => entry[k]).ToArray() : null;
+    }
+
+    private static Assertion? ParseCount(string tool, string count, string path, List<ScenarioValidationError> errors) =>
+        int.TryParse(count, out var n) && n >= 0
+            ? new Assertion.ToolCallCount(tool, n)
+            : AddError(errors, path, $"'count' must be a non-negative integer, got '{count}'.");
+
+    private static Assertion? ParseTokens(string tokens, string path, List<ScenarioValidationError> errors) =>
+        long.TryParse(tokens, out var n) && n >= 0
+            ? new Assertion.MaximumTokenUsage(n)
+            : AddError(errors, path, $"'tokens' must be a non-negative integer, got '{tokens}'.");
+
+    private static Assertion? ParseMaxDuration(string duration, string path, List<ScenarioValidationError> errors) =>
+        TryParseDuration(duration, out var d)
+            ? new Assertion.MaximumExecutionTime(d)
+            : AddError(errors, path, $"Cannot parse duration '{duration}'. Use e.g. '30s', '500ms', or a number of seconds.");
+
+    private static Assertion? AddError(List<ScenarioValidationError> errors, string path, string message)
+    {
+        errors.Add(new ScenarioValidationError(path, message));
+        return null;
+    }
+
     private static bool TryParseDuration(string? value, out TimeSpan duration)
     {
         duration = default;
@@ -166,10 +275,7 @@ public sealed class ScenarioLoader
         return true;
     }
 
-    /// <summary>
-    /// The wire shape of a scenario file. <c>Assertions</c> is accepted but unread —
-    /// Phase 2 gives it meaning; rejecting it now would break forward-written scenarios.
-    /// </summary>
+    /// <summary>The wire shape of a scenario file.</summary>
     private sealed class ScenarioDto
     {
         public string? Name { get; set; }
@@ -178,7 +284,7 @@ public sealed class ScenarioLoader
         public List<string>? AllowedTools { get; set; }
         public List<string>? ForbiddenTools { get; set; }
         public Dictionary<string, List<Dictionary<string, string>>>? ToolScripts { get; set; }
-        public List<object>? Assertions { get; set; }
+        public List<Dictionary<string, string>>? Assertions { get; set; }
     }
 
     private sealed class ExpectedDto

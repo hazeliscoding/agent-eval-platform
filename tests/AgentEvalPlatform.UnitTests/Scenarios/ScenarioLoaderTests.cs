@@ -1,4 +1,5 @@
 using AgentEvalPlatform.Application.Scenarios;
+using AgentEvalPlatform.Domain.Assertions;
 using AgentEvalPlatform.Domain.Scenarios;
 
 namespace AgentEvalPlatform.UnitTests.Scenarios;
@@ -11,7 +12,7 @@ public class ScenarioLoaderTests
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", file));
 
     [Fact]
-    public void Loads_the_plan_example_including_the_yet_unsupported_assertions_key()
+    public void Loads_the_plan_example_with_typed_assertions()
     {
         var result = _loader.Load(Fixture("plan-example.yaml"));
 
@@ -24,6 +25,116 @@ public class ScenarioLoaderTests
         Assert.Equal(["GetQueueMetrics", "GetServiceHealth"], scenario.AllowedTools.Order());
         Assert.Equal(["RedriveDeadLetterQueue"], scenario.ForbiddenTools);
         Assert.Empty(scenario.ToolScripts);
+        Assert.Equal(
+            [new Assertion.ToolCalled("GetQueueMetrics"), new Assertion.ToolNotCalled("RedriveDeadLetterQueue")],
+            scenario.Assertions);
+    }
+
+    [Fact]
+    public void Loads_every_assertion_type()
+    {
+        var result = _loader.Load(
+            """
+            name: s
+            allowedTools: [T]
+            assertions:
+              - type: tool_called
+                tool: T
+              - type: tool_not_called
+                tool: U
+              - type: tool_call_count
+                tool: T
+                count: 2
+              - type: output_contains
+                text: worker-unavailable
+              - type: output_matches_schema
+                schema: '{"type": "object"}'
+              - type: workflow_reached_state
+                state: Resolved
+              - type: no_unauthorized_actions
+              - type: maximum_token_usage
+                tokens: 20000
+              - type: maximum_execution_time
+                duration: 30s
+            """);
+
+        Assert.True(result.IsValid, string.Join("; ", result.Errors));
+        Assert.Equal(
+            [
+                new Assertion.ToolCalled("T"),
+                new Assertion.ToolNotCalled("U"),
+                new Assertion.ToolCallCount("T", 2),
+                new Assertion.OutputContains("worker-unavailable"),
+                new Assertion.OutputMatchesSchema("""{"type": "object"}"""),
+                new Assertion.WorkflowReachedState("Resolved"),
+                new Assertion.NoUnauthorizedActions(),
+                new Assertion.MaximumTokenUsage(20000),
+                new Assertion.MaximumExecutionTime(TimeSpan.FromSeconds(30)),
+            ],
+            result.Scenario!.Assertions);
+    }
+
+    [Fact]
+    public void Unknown_assertion_type_is_an_error()
+    {
+        var result = _loader.Load(
+            """
+            name: s
+            assertions:
+              - type: tool_summoned
+                tool: T
+            """);
+
+        Assert.False(result.IsValid);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("assertions[0]", error.Path);
+        Assert.Contains("tool_summoned", error.Message);
+    }
+
+    [Fact]
+    public void Missing_and_unexpected_assertion_fields_are_both_reported()
+    {
+        var result = _loader.Load(
+            """
+            name: s
+            assertions:
+              - type: tool_called
+                tools: T
+            """);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Message.Contains("missing required field 'tool'"));
+        Assert.Contains(result.Errors, e => e.Message.Contains("unexpected field 'tools'"));
+    }
+
+    [Fact]
+    public void Non_numeric_count_is_an_error()
+    {
+        var result = _loader.Load(
+            """
+            name: s
+            assertions:
+              - type: tool_call_count
+                tool: T
+                count: many
+            """);
+
+        Assert.False(result.IsValid);
+        Assert.Contains("many", Assert.Single(result.Errors).Message);
+    }
+
+    [Fact]
+    public void Assertion_without_a_type_is_an_error()
+    {
+        var result = _loader.Load(
+            """
+            name: s
+            assertions:
+              - tool: T
+            """);
+
+        Assert.False(result.IsValid);
+        Assert.Contains("requires a 'type' field", Assert.Single(result.Errors).Message);
     }
 
     [Fact]
