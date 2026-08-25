@@ -22,13 +22,17 @@ public sealed class EvalScenario
     /// <summary>Scripts keyed by tool name. Every scripted tool must be in <see cref="AllowedTools"/>.</summary>
     public IReadOnlyDictionary<string, ToolScript> ToolScripts { get; }
 
+    /// <summary>What must hold for a run of this scenario to pass.</summary>
+    public IReadOnlyList<Assertions.Assertion> Assertions { get; }
+
     public EvalScenario(
         string name,
         IReadOnlyDictionary<string, string> initialState,
         string? expectedDiagnosis,
         IEnumerable<string> allowedTools,
         IEnumerable<string> forbiddenTools,
-        IEnumerable<ToolScript> toolScripts)
+        IEnumerable<ToolScript> toolScripts,
+        IEnumerable<Assertions.Assertion>? assertions = null)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -67,5 +71,6 @@ public sealed class EvalScenario
         AllowedTools = allowed;
         ForbiddenTools = forbidden;
         ToolScripts = scripts;
+        Assertions = assertions?.ToList() ?? [];
     }
 }
