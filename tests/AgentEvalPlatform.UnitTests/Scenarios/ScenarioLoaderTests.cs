@@ -153,6 +153,113 @@ public class ScenarioLoaderTests
     }
 
     [Fact]
+    public void Loads_every_fault_kind()
+    {
+        var result = _loader.Load(
+            """
+            name: chaos
+            allowedTools: [T]
+            toolScripts:
+              T:
+                - exception: connection reset by peer
+                - partial: '{"depth": 500'
+                - slow:
+                    latency: 30s
+                    payload: '{"depth": 500}'
+                - duplicate: '{"eventId": "evt-1"}'
+                - stale:
+                    age: 10m
+                    payload: '{"depth": 0}'
+                - unauthorized: token expired
+            """);
+
+        Assert.True(result.IsValid, string.Join("; ", result.Errors));
+        Assert.Equal(
+            [
+                new ScriptedResponse.Exception("connection reset by peer"),
+                new ScriptedResponse.Partial("""{"depth": 500"""),
+                new ScriptedResponse.Slow(TimeSpan.FromSeconds(30), """{"depth": 500}"""),
+                new ScriptedResponse.Duplicate("""{"eventId": "evt-1"}"""),
+                new ScriptedResponse.Stale(TimeSpan.FromMinutes(10), """{"depth": 0}"""),
+                new ScriptedResponse.Unauthorized("token expired"),
+            ],
+            result.Scenario!.ToolScripts["T"].Responses);
+    }
+
+    [Fact]
+    public void Minute_and_hour_duration_units_parse()
+    {
+        var result = _loader.Load(
+            """
+            name: s
+            allowedTools: [T]
+            toolScripts:
+              T:
+                - stale:
+                    age: 2h
+                    payload: old
+            """);
+
+        Assert.True(result.IsValid, string.Join("; ", result.Errors));
+        Assert.Equal(
+            new ScriptedResponse.Stale(TimeSpan.FromHours(2), "old"),
+            result.Scenario!.ToolScripts["T"].Responses[0]);
+    }
+
+    [Fact]
+    public void Slow_without_a_payload_key_is_an_error()
+    {
+        var result = _loader.Load(
+            """
+            name: s
+            allowedTools: [T]
+            toolScripts:
+              T:
+                - slow:
+                    latency: 30s
+            """);
+
+        Assert.False(result.IsValid);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("toolScripts.T[0]", error.Path);
+        Assert.Contains("'latency' and 'payload'", error.Message);
+    }
+
+    [Fact]
+    public void Slow_with_a_scalar_value_is_an_error()
+    {
+        var result = _loader.Load(
+            """
+            name: s
+            allowedTools: [T]
+            toolScripts:
+              T:
+                - slow: 30s
+            """);
+
+        Assert.False(result.IsValid);
+        Assert.Contains("map with 'latency' and 'payload'", Assert.Single(result.Errors).Message);
+    }
+
+    [Fact]
+    public void Stale_with_an_unparsable_age_is_an_error()
+    {
+        var result = _loader.Load(
+            """
+            name: s
+            allowedTools: [T]
+            toolScripts:
+              T:
+                - stale:
+                    age: ancient
+                    payload: '{}'
+            """);
+
+        Assert.False(result.IsValid);
+        Assert.Contains("ancient", Assert.Single(result.Errors).Message);
+    }
+
+    [Fact]
     public void Bare_number_timeouts_parse_as_seconds()
     {
         var result = _loader.Load(

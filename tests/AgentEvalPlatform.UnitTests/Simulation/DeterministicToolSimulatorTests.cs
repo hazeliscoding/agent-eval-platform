@@ -122,6 +122,59 @@ public class DeterministicToolSimulatorTests
     }
 
     [Fact]
+    public void Fault_variants_replay_as_their_matching_outcomes()
+    {
+        var scenario = Scenario([
+            new ToolScript("GetQueueMetrics", [
+                new ScriptedResponse.Exception("connection reset by peer"),
+                new ScriptedResponse.Partial("""{"depth": 500"""),
+                new ScriptedResponse.Slow(TimeSpan.FromSeconds(30), """{"depth":500}"""),
+                new ScriptedResponse.Duplicate("""{"eventId":"evt-1"}"""),
+                new ScriptedResponse.Stale(TimeSpan.FromMinutes(10), """{"depth":0}"""),
+                new ScriptedResponse.Unauthorized("token expired"),
+            ]),
+        ]);
+        var simulator = new DeterministicToolSimulator(scenario);
+
+        Assert.Equal(new ToolCallOutcome.Exception("connection reset by peer"), simulator.Call("GetQueueMetrics"));
+        Assert.Equal(new ToolCallOutcome.Partial("""{"depth": 500"""), simulator.Call("GetQueueMetrics"));
+        Assert.Equal(new ToolCallOutcome.Slow(TimeSpan.FromSeconds(30), """{"depth":500}"""), simulator.Call("GetQueueMetrics"));
+        Assert.Equal(new ToolCallOutcome.Duplicate("""{"eventId":"evt-1"}"""), simulator.Call("GetQueueMetrics"));
+        Assert.Equal(new ToolCallOutcome.Stale(TimeSpan.FromMinutes(10), """{"depth":0}"""), simulator.Call("GetQueueMetrics"));
+        Assert.Equal(new ToolCallOutcome.Unauthorized("token expired"), simulator.Call("GetQueueMetrics"));
+    }
+
+    [Fact]
+    public void Tool_level_unauthorized_is_not_a_policy_refusal()
+    {
+        var scenario = Scenario([
+            new ToolScript("GetQueueMetrics", [new ScriptedResponse.Unauthorized("token expired")]),
+        ]);
+        var simulator = new DeterministicToolSimulator(scenario);
+
+        simulator.Call("GetQueueMetrics");
+
+        // The tool denied the call, but the agent stayed inside its allowed set —
+        // NoUnauthorizedActions must not count this against the agent.
+        Assert.Empty(simulator.Transcript.Refusals);
+    }
+
+    [Fact]
+    public void Slow_responses_do_not_actually_sleep()
+    {
+        var scenario = Scenario([
+            new ToolScript("GetQueueMetrics", [new ScriptedResponse.Slow(TimeSpan.FromMinutes(5), "{}")]),
+        ]);
+        var simulator = new DeterministicToolSimulator(scenario);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        simulator.Call("GetQueueMetrics");
+        stopwatch.Stop();
+
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
     public void Timeout_responses_do_not_actually_sleep()
     {
         var scenario = Scenario([

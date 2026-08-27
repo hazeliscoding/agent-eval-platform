@@ -16,6 +16,19 @@ public abstract record ToolCallOutcome
 
     public sealed record Malformed(string RawText) : ToolCallOutcome;
 
+    public sealed record Exception(string Message) : ToolCallOutcome;
+
+    public sealed record Partial(string Payload) : ToolCallOutcome;
+
+    public sealed record Slow(TimeSpan Latency, string Payload) : ToolCallOutcome;
+
+    public sealed record Duplicate(string Payload) : ToolCallOutcome;
+
+    public sealed record Stale(TimeSpan Age, string Payload) : ToolCallOutcome;
+
+    /// <summary>The tool denied the call itself — not a policy refusal by the simulator.</summary>
+    public sealed record Unauthorized(string Message) : ToolCallOutcome;
+
     /// <summary>The tool is in the scenario's forbiddenTools list.</summary>
     public sealed record RefusedForbidden : ToolCallOutcome;
 

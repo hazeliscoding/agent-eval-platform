@@ -15,7 +15,8 @@ namespace AgentEvalPlatform.Application.Scenarios;
 /// </summary>
 public sealed class ScenarioLoader
 {
-    private static readonly string[] ResponseKinds = ["success", "timeout", "malformed"];
+    private static readonly string[] ResponseKinds =
+        ["success", "timeout", "malformed", "exception", "partial", "slow", "duplicate", "stale", "unauthorized"];
 
     private readonly IDeserializer _deserializer = new DeserializerBuilder()
         .WithNamingConvention(CamelCaseNamingConvention.Instance)
@@ -73,7 +74,7 @@ public sealed class ScenarioLoader
     }
 
     private static List<ToolScript> ParseScripts(
-        Dictionary<string, List<Dictionary<string, string>>>? toolScripts,
+        Dictionary<string, List<Dictionary<string, object>>>? toolScripts,
         List<ScenarioValidationError> errors)
     {
         var scripts = new List<ToolScript>();
@@ -95,7 +96,8 @@ public sealed class ScenarioLoader
                     continue;
                 }
 
-                var (kind, value) = entries[i].Single();
+                var (kind, rawValue) = entries[i].Single();
+                var value = rawValue as string;
                 switch (kind)
                 {
                     case "success":
@@ -104,6 +106,18 @@ public sealed class ScenarioLoader
                     case "malformed":
                         responses.Add(new ScriptedResponse.Malformed(value ?? string.Empty));
                         break;
+                    case "exception":
+                        responses.Add(new ScriptedResponse.Exception(value ?? string.Empty));
+                        break;
+                    case "partial":
+                        responses.Add(new ScriptedResponse.Partial(value ?? string.Empty));
+                        break;
+                    case "duplicate":
+                        responses.Add(new ScriptedResponse.Duplicate(value ?? string.Empty));
+                        break;
+                    case "unauthorized":
+                        responses.Add(new ScriptedResponse.Unauthorized(value ?? string.Empty));
+                        break;
                     case "timeout" when TryParseDuration(value, out var after):
                         responses.Add(new ScriptedResponse.Timeout(after));
                         break;
@@ -111,6 +125,14 @@ public sealed class ScenarioLoader
                         errors.Add(new ScenarioValidationError(
                             path, $"Cannot parse timeout duration '{value}'. Use e.g. '5s', '250ms', or a number of seconds."));
                         break;
+                    case "slow" when TryParseTimedPayload(rawValue, "latency", path, errors, out var slow):
+                        responses.Add(new ScriptedResponse.Slow(slow.Duration, slow.Payload));
+                        break;
+                    case "stale" when TryParseTimedPayload(rawValue, "age", path, errors, out var stale):
+                        responses.Add(new ScriptedResponse.Stale(stale.Duration, stale.Payload));
+                        break;
+                    case "slow" or "stale":
+                        break; // TryParseTimedPayload already reported the specifics
                     default:
                         errors.Add(new ScenarioValidationError(
                             path, $"Unknown response kind '{kind}'. Expected one of: {string.Join(", ", ResponseKinds)}."));
@@ -250,6 +272,46 @@ public sealed class ScenarioLoader
         return null;
     }
 
+    /// <summary>
+    /// Parses <c>slow</c>/<c>stale</c> entries, whose value is a nested map of a
+    /// duration (keyed <paramref name="durationKey"/>) plus a <c>payload</c>.
+    /// Reports its own errors; the caller's <c>when</c> guard just skips the add.
+    /// </summary>
+    private static bool TryParseTimedPayload(
+        object? rawValue,
+        string durationKey,
+        string path,
+        List<ScenarioValidationError> errors,
+        out (TimeSpan Duration, string Payload) parsed)
+    {
+        parsed = default;
+        if (rawValue is not Dictionary<object, object> map)
+        {
+            errors.Add(new ScenarioValidationError(
+                path, $"Expected a map with '{durationKey}' and 'payload' keys."));
+            return false;
+        }
+
+        var keys = map.Keys.Select(k => k.ToString()).ToList();
+        if (!keys.Contains(durationKey) || !keys.Contains("payload") || keys.Count != 2)
+        {
+            errors.Add(new ScenarioValidationError(
+                path, $"Expected exactly the keys '{durationKey}' and 'payload', got: {string.Join(", ", keys)}."));
+            return false;
+        }
+
+        var durationText = map.Single(kv => kv.Key.ToString() == durationKey).Value?.ToString();
+        if (!TryParseDuration(durationText, out var duration))
+        {
+            errors.Add(new ScenarioValidationError(
+                path, $"Cannot parse {durationKey} '{durationText}'. Use e.g. '30s', '250ms', '10m', '2h', or a number of seconds."));
+            return false;
+        }
+
+        parsed = (duration, map.Single(kv => kv.Key.ToString() == "payload").Value?.ToString() ?? string.Empty);
+        return true;
+    }
+
     private static bool TryParseDuration(string? value, out TimeSpan duration)
     {
         duration = default;
@@ -263,6 +325,8 @@ public sealed class ScenarioLoader
         {
             _ when text.EndsWith("ms", StringComparison.Ordinal) => (text[..^2], TimeSpan.TicksPerMillisecond),
             _ when text.EndsWith('s') => (text[..^1], TimeSpan.TicksPerSecond),
+            _ when text.EndsWith('m') => (text[..^1], TimeSpan.TicksPerMinute),
+            _ when text.EndsWith('h') => (text[..^1], TimeSpan.TicksPerHour),
             _ => (text, TimeSpan.TicksPerSecond),
         };
 
@@ -283,7 +347,7 @@ public sealed class ScenarioLoader
         public ExpectedDto? Expected { get; set; }
         public List<string>? AllowedTools { get; set; }
         public List<string>? ForbiddenTools { get; set; }
-        public Dictionary<string, List<Dictionary<string, string>>>? ToolScripts { get; set; }
+        public Dictionary<string, List<Dictionary<string, object>>>? ToolScripts { get; set; }
         public List<Dictionary<string, string>>? Assertions { get; set; }
     }
 
