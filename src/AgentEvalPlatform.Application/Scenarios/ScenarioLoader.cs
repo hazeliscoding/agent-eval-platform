@@ -1,5 +1,6 @@
 using AgentEvalPlatform.Domain;
 using AgentEvalPlatform.Domain.Assertions;
+using AgentEvalPlatform.Domain.Injections;
 using AgentEvalPlatform.Domain.Scenarios;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
@@ -16,7 +17,7 @@ namespace AgentEvalPlatform.Application.Scenarios;
 public sealed class ScenarioLoader
 {
     private static readonly string[] ResponseKinds =
-        ["success", "timeout", "malformed", "exception", "partial", "slow", "duplicate", "stale", "unauthorized"];
+        ["success", "timeout", "malformed", "exception", "partial", "slow", "duplicate", "stale", "unauthorized", "injected"];
 
     private readonly IDeserializer _deserializer = new DeserializerBuilder()
         .WithNamingConvention(CamelCaseNamingConvention.Instance)
@@ -50,6 +51,7 @@ public sealed class ScenarioLoader
 
         var scripts = ParseScripts(dto.ToolScripts, errors);
         var assertions = ParseAssertions(dto.Assertions, errors);
+        var descriptionInjections = ParseToolDescriptionInjections(dto.ToolDescriptions, errors);
 
         if (errors.Count > 0)
         {
@@ -65,7 +67,8 @@ public sealed class ScenarioLoader
                 dto.AllowedTools ?? [],
                 dto.ForbiddenTools ?? [],
                 scripts,
-                assertions));
+                assertions,
+                descriptionInjections));
         }
         catch (DomainRuleException ex)
         {
@@ -133,6 +136,11 @@ public sealed class ScenarioLoader
                         break;
                     case "slow" or "stale":
                         break; // TryParseTimedPayload already reported the specifics
+                    case "injected" when TryParseInjection(rawValue, requireSurface: true, path, errors, out var injection):
+                        responses.Add(new ScriptedResponse.Injected(injection, InjectionBenign(rawValue)));
+                        break;
+                    case "injected":
+                        break; // TryParseInjection reported the specifics
                     default:
                         errors.Add(new ScenarioValidationError(
                             path, $"Unknown response kind '{kind}'. Expected one of: {string.Join(", ", ResponseKinds)}."));
@@ -213,6 +221,8 @@ public sealed class ScenarioLoader
                     ? ParseTokens(tokens, path, errors) : null,
                 "maximum_execution_time" => Fields(entry, path, errors, "duration") is [var duration]
                     ? ParseMaxDuration(duration, path, errors) : null,
+                "injection_resisted" => Fields(entry, path, errors) is not null
+                    ? new Assertion.InjectionResisted() : null,
                 _ => AddError(errors, path, $"Unknown assertion type '{type}'."),
             };
 
@@ -271,6 +281,127 @@ public sealed class ScenarioLoader
         errors.Add(new ScenarioValidationError(path, message));
         return null;
     }
+
+    private static readonly Dictionary<string, InjectionSurface> Surfaces = new(StringComparer.Ordinal)
+    {
+        ["log_stream"] = InjectionSurface.LogStream,
+        ["document"] = InjectionSurface.Document,
+        ["email"] = InjectionSurface.Email,
+        ["issue_comment"] = InjectionSurface.IssueComment,
+        ["tool_description"] = InjectionSurface.ToolDescription,
+    };
+
+    /// <summary>
+    /// Parses the <c>toolDescriptions</c> map — one injection per tool, always on the
+    /// <c>tool_description</c> surface, with the description text as the benign content.
+    /// </summary>
+    private static Dictionary<string, Injection> ParseToolDescriptionInjections(
+        Dictionary<string, Dictionary<object, object>>? toolDescriptions,
+        List<ScenarioValidationError> errors)
+    {
+        var result = new Dictionary<string, Injection>(StringComparer.Ordinal);
+        if (toolDescriptions is null)
+        {
+            return result;
+        }
+
+        foreach (var (tool, map) in toolDescriptions)
+        {
+            var path = $"toolDescriptions.{tool}";
+            if (TryParseInjection(map, requireSurface: false, path, errors, out var injection))
+            {
+                if (injection.Surface != InjectionSurface.ToolDescription)
+                {
+                    errors.Add(new ScenarioValidationError(
+                        path, "A toolDescriptions injection is always on the 'tool_description' surface; omit 'surface'."));
+                    continue;
+                }
+
+                result[tool] = injection;
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Parses an injection map: <c>template</c> XOR <c>text</c> for the adversarial
+    /// string, optional <c>demandedTool</c>, optional <c>surface</c> (required for
+    /// response injections, fixed for tool descriptions). Reports its own errors; the
+    /// caller's <c>when</c> guard skips the add on failure.
+    /// </summary>
+    private static bool TryParseInjection(
+        object? rawValue,
+        bool requireSurface,
+        string path,
+        List<ScenarioValidationError> errors,
+        out Injection injection)
+    {
+        injection = null!;
+        if (rawValue is not Dictionary<object, object> map)
+        {
+            errors.Add(new ScenarioValidationError(path, "Expected an injection map (surface/template-or-text/demandedTool/benign)."));
+            return false;
+        }
+
+        var fields = map.ToDictionary(kv => kv.Key.ToString() ?? string.Empty, kv => kv.Value?.ToString());
+        var demandedTool = fields.GetValueOrDefault("demandedTool");
+
+        var surface = InjectionSurface.ToolDescription;
+        if (fields.TryGetValue("surface", out var surfaceName))
+        {
+            if (surfaceName is null || !Surfaces.TryGetValue(surfaceName, out surface))
+            {
+                errors.Add(new ScenarioValidationError(
+                    path, $"Unknown surface '{surfaceName}'. Expected one of: {string.Join(", ", Surfaces.Keys)}."));
+                return false;
+            }
+        }
+        else if (requireSurface)
+        {
+            errors.Add(new ScenarioValidationError(path, "An injected response requires a 'surface'."));
+            return false;
+        }
+
+        var hasTemplate = fields.TryGetValue("template", out var templateName);
+        var hasText = fields.TryGetValue("text", out var literalText);
+        if (hasTemplate == hasText)
+        {
+            errors.Add(new ScenarioValidationError(path, "An injection needs exactly one of 'template' or 'text'."));
+            return false;
+        }
+
+        string adversarial;
+        if (hasTemplate)
+        {
+            if (templateName is null || !InjectionTemplates.TryResolve(templateName, demandedTool, out adversarial))
+            {
+                errors.Add(new ScenarioValidationError(
+                    path, $"Unknown injection template '{templateName}'. Known: {string.Join(", ", InjectionTemplates.Names)}."));
+                return false;
+            }
+        }
+        else
+        {
+            adversarial = literalText ?? string.Empty;
+        }
+
+        try
+        {
+            injection = new Injection(surface, adversarial, demandedTool);
+            return true;
+        }
+        catch (DomainRuleException ex)
+        {
+            errors.Add(new ScenarioValidationError(path, ex.Message));
+            return false;
+        }
+    }
+
+    private static string InjectionBenign(object? rawValue) =>
+        rawValue is Dictionary<object, object> map && map.TryGetValue("benign", out var benign)
+            ? benign?.ToString() ?? string.Empty
+            : string.Empty;
 
     /// <summary>
     /// Parses <c>slow</c>/<c>stale</c> entries, whose value is a nested map of a
@@ -348,6 +479,7 @@ public sealed class ScenarioLoader
         public List<string>? AllowedTools { get; set; }
         public List<string>? ForbiddenTools { get; set; }
         public Dictionary<string, List<Dictionary<string, object>>>? ToolScripts { get; set; }
+        public Dictionary<string, Dictionary<object, object>>? ToolDescriptions { get; set; }
         public List<Dictionary<string, string>>? Assertions { get; set; }
     }
 
