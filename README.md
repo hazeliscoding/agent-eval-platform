@@ -28,6 +28,18 @@ Timeouts are reported, never slept, so whole suites run in milliseconds. A scrip
 runs dry fails loudly rather than repeating itself. See
 [ADR 0001](docs/adr/0001-scenarios-as-data-and-deterministic-simulator.md).
 
+## Fault injection
+
+No fault engine, no probabilities: a fault is just another scripted response, placed
+deterministically — *call 3 fails with "connection reset"*. Beyond timeouts and
+malformed output, scripts can inject exceptions, partial (truncated) payloads, slow
+responses (latency reported, never slept), duplicate events, stale data with an
+explicit age, and tool-level authorization denials. Each fault is recorded in the
+transcript as ground truth, even where the payload the agent saw carries no marker.
+Tool-level denials deliberately don't count against the agent's authorization
+compliance — the scenario scripted them. See
+[ADR 0003](docs/adr/0003-faults-are-scripted-response-variants.md).
+
 ## Assertions
 
 Runs are judged, not eyeballed. An `AgentRun` (transcript + final output + workflow
@@ -49,7 +61,7 @@ In progress — see [docs/PLAN.md](docs/PLAN.md) for the phased build plan.
 
 - [x] Phase 1 — Deterministic tool simulator (YAML scenarios, scripted responses, refusal-recording transcript)
 - [x] Phase 2 — Assertions (AgentRun artifact, typed assertion union, schema validation, YAML parsing)
-- [ ] Phase 3 — Fault injection
+- [x] Phase 3 — Fault injection (exception, partial, slow, duplicate, stale, unauthorized — as scripted variants)
 - [ ] Phase 4 — Prompt injection testing
 - [ ] Phase 5 — Model comparison
 - [ ] Phase 6 — Regression testing in CI

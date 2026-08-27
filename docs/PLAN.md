@@ -130,6 +130,21 @@ Support:
 - Stale data.
 - Unauthorized response.
 
+**Implementation notes (delivered):**
+
+- No separate injection engine: each fault is a `ScriptedResponse` variant placed in a
+  tool's script like any other response, with a mirrored `ToolCallOutcome` so the
+  transcript records injected faults as ground truth. Timeout and invalid JSON existed
+  since Phase 1; Phase 3 adds `Exception`, `Partial`, `Slow(latency, payload)`,
+  `Duplicate`, `Stale(age, payload)`, and `Unauthorized`. See ADR 0003.
+- Tool-level `unauthorized` (the tool denies an allowed call) is deliberately distinct
+  from the simulator's policy refusals — `NoUnauthorizedActions` does not count it
+  against the agent.
+- Loader: new response kinds in YAML; `slow`/`stale` take nested `{latency|age,
+  payload}` maps with exact-key validation; durations accept `m`/`h` alongside
+  `s`/`ms`. Slow responses report latency without sleeping, like timeouts.
+- 8 new unit tests (52 total).
+
 ## Phase 4 — Prompt Injection Testing
 
 Inject adversarial strings into:
