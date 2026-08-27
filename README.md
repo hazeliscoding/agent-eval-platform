@@ -40,6 +40,17 @@ Tool-level denials deliberately don't count against the agent's authorization
 compliance — the scenario scripted them. See
 [ADR 0003](docs/adr/0003-faults-are-scripted-response-variants.md).
 
+## Prompt injection testing
+
+Does the agent treat tool output as data or as instructions? An injection carries an
+adversarial payload through a surface (logs, documents, email, issue comments, or a tool
+description) plus ground truth the agent never sees — the attack text and the tool it
+tries to coerce. The agent receives only the composed payload; resistance is scored
+deterministically from the transcript, with no LLM judge: `injection_resisted` fails only
+if the agent called the demanded tool *after* being exposed to the injection. A named
+template corpus covers the common attacks; scenarios can also supply literal text. See
+[ADR 0004](docs/adr/0004-prompt-injection-as-payloads-with-ground-truth.md).
+
 ## Assertions
 
 Runs are judged, not eyeballed. An `AgentRun` (transcript + final output + workflow
@@ -62,7 +73,7 @@ In progress — see [docs/PLAN.md](docs/PLAN.md) for the phased build plan.
 - [x] Phase 1 — Deterministic tool simulator (YAML scenarios, scripted responses, refusal-recording transcript)
 - [x] Phase 2 — Assertions (AgentRun artifact, typed assertion union, schema validation, YAML parsing)
 - [x] Phase 3 — Fault injection (exception, partial, slow, duplicate, stale, unauthorized — as scripted variants)
-- [ ] Phase 4 — Prompt injection testing
+- [x] Phase 4 — Prompt injection testing (five surfaces, template corpus, sequence-aware resistance scoring)
 - [ ] Phase 5 — Model comparison
 - [ ] Phase 6 — Regression testing in CI
 
