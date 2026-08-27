@@ -82,6 +82,7 @@ public sealed class DeterministicToolSimulator
             ScriptedResponse.Duplicate d => new ToolCallOutcome.Duplicate(d.Payload),
             ScriptedResponse.Stale s => new ToolCallOutcome.Stale(s.Age, s.Payload),
             ScriptedResponse.Unauthorized u => new ToolCallOutcome.Unauthorized(u.Message),
+            ScriptedResponse.Injected inj => new ToolCallOutcome.Injected(inj.Injection, inj.Injection.Embed(inj.BenignContent)),
             var unknown => throw new DomainRuleException($"Unhandled scripted response type {unknown.GetType().Name}."),
         };
     }

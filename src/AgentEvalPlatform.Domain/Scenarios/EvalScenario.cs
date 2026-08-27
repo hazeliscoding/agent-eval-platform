@@ -25,6 +25,13 @@ public sealed class EvalScenario
     /// <summary>What must hold for a run of this scenario to pass.</summary>
     public IReadOnlyList<Assertions.Assertion> Assertions { get; }
 
+    /// <summary>
+    /// Injections carried by a tool's description text — the one surface present before
+    /// any call is made (the agent reads it when deciding whether to use the tool).
+    /// Keyed by tool name; every keyed tool must be allowed.
+    /// </summary>
+    public IReadOnlyDictionary<string, Injections.Injection> ToolDescriptionInjections { get; }
+
     public EvalScenario(
         string name,
         IReadOnlyDictionary<string, string> initialState,
@@ -32,7 +39,8 @@ public sealed class EvalScenario
         IEnumerable<string> allowedTools,
         IEnumerable<string> forbiddenTools,
         IEnumerable<ToolScript> toolScripts,
-        IEnumerable<Assertions.Assertion>? assertions = null)
+        IEnumerable<Assertions.Assertion>? assertions = null,
+        IReadOnlyDictionary<string, Injections.Injection>? toolDescriptionInjections = null)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -65,6 +73,13 @@ public sealed class EvalScenario
             }
         }
 
+        var descriptionInjections = toolDescriptionInjections ?? new Dictionary<string, Injections.Injection>();
+        foreach (var tool in descriptionInjections.Keys.Where(t => !allowed.Contains(t)))
+        {
+            throw new DomainRuleException(
+                $"Scenario '{name}' injects the description of tool '{tool}', which is not in allowedTools.");
+        }
+
         Name = name;
         InitialState = initialState;
         ExpectedDiagnosis = expectedDiagnosis;
@@ -72,5 +87,6 @@ public sealed class EvalScenario
         ForbiddenTools = forbidden;
         ToolScripts = scripts;
         Assertions = assertions?.ToList() ?? [];
+        ToolDescriptionInjections = descriptionInjections;
     }
 }

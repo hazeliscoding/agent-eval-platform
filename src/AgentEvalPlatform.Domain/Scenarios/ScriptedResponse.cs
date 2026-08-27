@@ -60,4 +60,12 @@ public abstract record ScriptedResponse
     /// which mean the *agent* overstepped.
     /// </summary>
     public sealed record Unauthorized(string Message) : ScriptedResponse;
+
+    /// <summary>
+    /// A successful-looking response whose payload smuggles an adversarial instruction
+    /// (see <see cref="Injections.Injection"/>). The agent receives only the composed
+    /// text and must treat it as data; the injection travels in the transcript as
+    /// ground truth for the resistance assertion.
+    /// </summary>
+    public sealed record Injected(Injections.Injection Injection, string BenignContent) : ScriptedResponse;
 }

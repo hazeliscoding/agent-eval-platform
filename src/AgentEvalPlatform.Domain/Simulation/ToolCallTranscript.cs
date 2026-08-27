@@ -28,5 +28,9 @@ public sealed class ToolCallTranscript
     public IReadOnlyList<ToolCall> Refusals =>
         _calls.Where(c => c.Outcome is ToolCallOutcome.RefusedForbidden or ToolCallOutcome.RefusedUnknown).ToList();
 
+    /// <summary>The calls that delivered an adversarial payload to the agent, in order.</summary>
+    public IReadOnlyList<ToolCall> Injections =>
+        _calls.Where(c => c.Outcome is ToolCallOutcome.Injected).ToList();
+
     internal void Append(ToolCall call) => _calls.Add(call);
 }

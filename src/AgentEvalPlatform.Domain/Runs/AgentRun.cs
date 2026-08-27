@@ -1,3 +1,4 @@
+using AgentEvalPlatform.Domain.Injections;
 using AgentEvalPlatform.Domain.Simulation;
 
 namespace AgentEvalPlatform.Domain.Runs;
@@ -15,12 +16,20 @@ public sealed record AgentRun
     public long TokensUsed { get; }
     public TimeSpan Duration { get; }
 
+    /// <summary>
+    /// Injections the agent was exposed to before making any call — carried in tool
+    /// descriptions it read up front. Runtime injections (delivered by tool responses)
+    /// live in <see cref="Transcript"/> instead, with their exposure sequence.
+    /// </summary>
+    public IReadOnlyList<Injection> DescriptionInjections { get; }
+
     public AgentRun(
         ToolCallTranscript transcript,
         string output,
         IReadOnlyList<string> reachedStates,
         long tokensUsed,
-        TimeSpan duration)
+        TimeSpan duration,
+        IReadOnlyList<Injection>? descriptionInjections = null)
     {
         if (tokensUsed < 0)
         {
@@ -37,5 +46,6 @@ public sealed record AgentRun
         ReachedStates = reachedStates;
         TokensUsed = tokensUsed;
         Duration = duration;
+        DescriptionInjections = descriptionInjections ?? [];
     }
 }

@@ -29,6 +29,13 @@ public abstract record ToolCallOutcome
     /// <summary>The tool denied the call itself — not a policy refusal by the simulator.</summary>
     public sealed record Unauthorized(string Message) : ToolCallOutcome;
 
+    /// <summary>
+    /// A response carrying an adversarial payload. <see cref="Payload"/> is what the
+    /// agent saw (benign content + embedded attack); <see cref="Injection"/> is the
+    /// ground truth the agent never sees.
+    /// </summary>
+    public sealed record Injected(Injections.Injection Injection, string Payload) : ToolCallOutcome;
+
     /// <summary>The tool is in the scenario's forbiddenTools list.</summary>
     public sealed record RefusedForbidden : ToolCallOutcome;
 
