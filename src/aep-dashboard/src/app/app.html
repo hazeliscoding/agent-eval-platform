@@ -1,0 +1,133 @@
+@if (dataset(); as data) {
+  <div class="page">
+    <header class="head">
+      <div>
+        <h1>Agent Eval Dashboard</h1>
+        <p class="sub">
+          Suite <strong>{{ data.suiteName }}</strong> · {{ data.scenarios.length }} scenarios ·
+          {{ data.configurations.length }} configurations · generated {{ data.generatedAt | date: 'medium' }}
+        </p>
+      </div>
+      @if (data.regressions.length > 0) {
+        <span class="banner fail">⛔ {{ data.regressions.length }} regression(s) vs baseline</span>
+      } @else {
+        <span class="banner pass">✅ No regressions vs baseline</span>
+      }
+    </header>
+
+    <!-- Overview: one score card per configuration -->
+    <section class="cards">
+      @for (config of data.configurations; track config.label) {
+        <div class="card score">
+          <div class="score-head">
+            <span class="label">{{ config.label }}</span>
+            <span class="model">{{ config.model }}</span>
+          </div>
+          <div class="rate" [class.bad]="config.score.successRate < 1">
+            {{ config.score.successRate | percent: '1.0-0' }}
+            <span class="rate-sub">{{ config.score.passedScenarios }}/{{ config.score.scenarioCount }} passed</span>
+          </div>
+          <dl class="metrics">
+            <div [class.danger]="config.score.unauthorizedAttempts > 0">
+              <dt>Unsafe actions</dt><dd>{{ config.score.unauthorizedAttempts }}</dd>
+            </div>
+            <div><dt>Tool calls</dt><dd>{{ config.score.totalToolCalls }}</dd></div>
+            <div><dt>Tokens</dt><dd>{{ config.score.totalTokens | number }}</dd></div>
+            <div><dt>Cost</dt><dd>${{ config.score.totalCost | number: '1.4-4' }}</dd></div>
+          </dl>
+        </div>
+      }
+    </section>
+
+    <div class="two-col">
+      <!-- Comparison matrix -->
+      <section class="card panel">
+        <h2>Scenario results</h2>
+        <p class="muted">Baseline is <strong>{{ baselineLabel() }}</strong>. Click a row for detail.</p>
+        <table class="matrix">
+          <thead>
+            <tr>
+              <th>Scenario</th>
+              @for (label of configLabels(); track label) {
+                <th>{{ label }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of data.scenarios; track row.name) {
+              <tr [class.selected]="selectedScenario()?.name === row.name" (click)="select(row.name)">
+                <td class="name">{{ row.name }}</td>
+                @for (label of configLabels(); track label) {
+                  <td class="cell" [class.regressed]="isRegression(row.name, label)">
+                    @if (row.results[label].passed) {
+                      <span class="pill pass">pass</span>
+                    } @else {
+                      <span class="pill fail">fail</span>
+                    }
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Trend -->
+      <section class="card panel">
+        <h2>Success-rate trend</h2>
+        <app-trend-chart [points]="data.history" />
+      </section>
+    </div>
+
+    <!-- Scenario detail -->
+    @if (selectedScenario(); as scenario) {
+      <section class="card panel">
+        <h2>{{ scenario.name }} — detail</h2>
+        <div class="detail-grid">
+          @for (label of configLabels(); track label) {
+            <div class="detail-col" [class.regressed]="isRegression(scenario.name, label)">
+              <div class="detail-head">
+                <span class="label">{{ label }}</span>
+                @if (scenario.results[label].passed) {
+                  <span class="pill pass">pass</span>
+                } @else {
+                  <span class="pill fail">fail</span>
+                }
+              </div>
+
+              <div class="signals">
+                <span class="signal" [class.danger]="scenario.results[label].unauthorizedAttempts > 0">
+                  {{ scenario.results[label].unauthorizedAttempts }} unsafe
+                </span>
+                <span class="signal" [class.danger]="scenario.results[label].injectionsObeyed > 0">
+                  {{ scenario.results[label].injectionsObeyed }} injection obeyed
+                </span>
+                <span class="signal">{{ scenario.results[label].toolCalls }} tool calls</span>
+              </div>
+
+              <ul class="assertions">
+                @for (a of scenario.results[label].assertions; track a.kind) {
+                  <li [class.security]="isSecurityAssertion(a.kind)">
+                    <span class="mark" [class.ok]="a.passed">{{ a.passed ? '✓' : '✗' }}</span>
+                    <span class="akind">{{ a.kind }}</span>
+                    <span class="amsg">{{ a.message }}</span>
+                  </li>
+                }
+              </ul>
+
+              @if (scenario.results[label].toolUsage.length > 0) {
+                <div class="tools">
+                  @for (u of scenario.results[label].toolUsage; track u.tool) {
+                    <span class="tool">{{ u.tool }} ×{{ u.count }}</span>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </section>
+    }
+  </div>
+} @else {
+  <div class="loading">Loading eval results…</div>
+}
