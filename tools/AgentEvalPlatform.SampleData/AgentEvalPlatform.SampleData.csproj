@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>AgentEvalPlatform.SampleData</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AgentEvalPlatform.Application\AgentEvalPlatform.Application.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -10,5 +10,6 @@
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/AgentEvalPlatform.Cli/AgentEvalPlatform.Cli.csproj" />
+    <Project Path="tools/AgentEvalPlatform.SampleData/AgentEvalPlatform.SampleData.csproj" />
   </Folder>
 </Solution>

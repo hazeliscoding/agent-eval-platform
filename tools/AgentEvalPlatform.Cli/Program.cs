@@ -1,6 +1,8 @@
 using System.Globalization;
 using AgentEvalPlatform.Application.Assertions;
 using AgentEvalPlatform.Application.Regression;
+using AgentEvalPlatform.Application.Reporting;
+using AgentEvalPlatform.Application.Reporting.Dashboard;
 using AgentEvalPlatform.Application.Running;
 using AgentEvalPlatform.Application.Scenarios;
 using AgentEvalPlatform.Cli;
@@ -79,8 +81,38 @@ switch (cli.Mode)
         return result.Passed ? ExitCode.Ok : ExitCode.Regressed;
     }
 
+    case "compare":
+    {
+        // Here the third positional is the compare-config path, not a baseline.
+        var config = CompareConfigReader.Read(cli.BaselinePath);
+        var configurations = config.Configurations
+            .Select(c => new RunConfiguration(
+                c.Label, c.Model, ReadPrompt(c.PromptFile), c.MaxTurns ?? 8))
+            .ToList();
+
+        var comparison = await new SuiteComparison(new AnthropicAgentModel(), new JsonSchemaValidator())
+            .RunAsync(suite, configurations);
+
+        Console.WriteLine(ComparisonReportWriter.Write(comparison));
+
+        // One history point per configuration at this run, so the dashboard trend isn't empty.
+        var stamp = DateTimeOffset.UtcNow;
+        var history = comparison.Runs
+            .Select(r => new HistoryPoint(stamp, r.Configuration.Label, r.Score.SuccessRate,
+                r.Score.UnauthorizedAttempts, r.Score.TotalCost, r.Score.TotalDuration.TotalSeconds))
+            .ToList();
+
+        var dataset = DashboardDatasetBuilder.Build(comparison, history, stamp);
+        var outPath = cli.Get("out", "dataset.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
+        await File.WriteAllTextAsync(outPath, DashboardJson.Serialize(dataset));
+        Console.WriteLine($"Wrote dashboard dataset → {outPath}");
+
+        return comparison.Regressions.Count == 0 ? ExitCode.Ok : ExitCode.Regressed;
+    }
+
     default:
-        Console.Error.WriteLine($"Unknown mode '{cli.Mode}'. Use 'record' or 'check'.");
+        Console.Error.WriteLine($"Unknown mode '{cli.Mode}'. Use 'record', 'check', or 'compare'.");
         return ExitCode.Usage;
 }
 
