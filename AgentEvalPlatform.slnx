@@ -2,8 +2,10 @@
   <Folder Name="/src/">
     <Project Path="src/AgentEvalPlatform.Domain/AgentEvalPlatform.Domain.csproj" />
     <Project Path="src/AgentEvalPlatform.Application/AgentEvalPlatform.Application.csproj" />
+    <Project Path="src/AgentEvalPlatform.Infrastructure/AgentEvalPlatform.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AgentEvalPlatform.UnitTests/AgentEvalPlatform.UnitTests.csproj" />
+    <Project Path="tests/AgentEvalPlatform.IntegrationTests/AgentEvalPlatform.IntegrationTests.csproj" />
   </Folder>
 </Solution>
