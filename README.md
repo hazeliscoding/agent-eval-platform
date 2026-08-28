@@ -15,7 +15,7 @@ Agents fail in ways unit tests don't catch — wrong tool calls, prompt injectio
 
 ## Stack
 
-.NET 10 · ASP.NET Core · PostgreSQL · EF Core · Angular · OpenTelemetry · xUnit + Testcontainers
+.NET 10 · Anthropic SDK · ASP.NET Core · PostgreSQL · EF Core · Angular · OpenTelemetry · xUnit + Testcontainers
 
 ## Deterministic tool simulator
 
@@ -27,6 +27,18 @@ and captures every call in an append-only transcript that later assertion phases
 Timeouts are reported, never slept, so whole suites run in milliseconds. A script that
 runs dry fails loudly rather than repeating itself. See
 [ADR 0001](docs/adr/0001-scenarios-as-data-and-deterministic-simulator.md).
+
+## Model comparison
+
+Run the same suite across models, prompt versions, or agent versions and diff the
+results. A `RunConfiguration` (label + model + system prompt) is one point in the
+comparison; the `ScenarioRunner` drives that model through each scenario's simulated
+tools to produce a scored `AgentRun`, and `SuiteComparison` diffs the configurations
+against a baseline — surfacing which scenarios *regressed*. The only non-deterministic
+piece is the model itself (behind `IAgentModel`, with an Anthropic adapter); everything
+downstream is deterministic, so the same model turns always produce the same score. The
+Markdown report shows the score table, regressions, and a per-scenario pass/fail matrix.
+See [ADR 0005](docs/adr/0005-runner-and-model-comparison.md).
 
 ## Fault injection
 
@@ -74,7 +86,7 @@ In progress — see [docs/PLAN.md](docs/PLAN.md) for the phased build plan.
 - [x] Phase 2 — Assertions (AgentRun artifact, typed assertion union, schema validation, YAML parsing)
 - [x] Phase 3 — Fault injection (exception, partial, slow, duplicate, stale, unauthorized — as scripted variants)
 - [x] Phase 4 — Prompt injection testing (five surfaces, template corpus, sequence-aware resistance scoring)
-- [ ] Phase 5 — Model comparison
+- [x] Phase 5 — Model comparison (real model runner, per-config scoring, baseline diff, Markdown report)
 - [ ] Phase 6 — Regression testing in CI
 
 ## Running Locally

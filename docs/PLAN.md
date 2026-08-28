@@ -195,6 +195,29 @@ Agent Version B
 
 Generate comparison reports.
 
+**Implementation notes (delivered):**
+
+- The inflection point: the first phase to drive a real model. `ScenarioRunner` is the
+  deterministic loop — it offers the scenario's allowed tools, routes every model tool
+  call through the `DeterministicToolSimulator`, and assembles the `AgentRun`. The model
+  (`IAgentModel`, contract copied from incident-control-plane) is the *only*
+  non-deterministic seam; a fixed turn sequence yields a fixed run.
+- `RunConfiguration { Label, Model, SystemPrompt, MaxTurns }` collapses the three axes
+  above into one labelled thing. `EvalSuite` + `SuiteRunner` run and score a suite under
+  one config (`Score`: success rate, assertion pass rate, tool calls, unauthorized
+  attempts, tokens, simulated latency, cost via `ModelPricing`). `SuiteComparison` runs a
+  suite under N configs and diffs against the baseline (first config) — `Regressions` /
+  `Improvements`. `ComparisonReportWriter` renders the Markdown report.
+- `AgentEvalPlatform.Infrastructure` (new) holds `AnthropicAgentModel` (SDK 12.42.0);
+  domain and application stay SDK-free. Thinking is left unset so the adapter works
+  across the whole model matrix a comparison drives.
+- 26 new unit tests (85 total) via a `ScriptedAgentModel` fake — including the plan's
+  headline demo: same suite, a "safe" vs a "reckless" prompt, the comparison surfacing
+  the regressions. One key-gated live integration test (verified against real Haiku 4.5).
+  See ADR 0005.
+- Deferred to Phase 6: a runnable CLI, persistence/Docker, and baseline *storage* (this
+  phase diffs configs against each other, not against a stored baseline).
+
 ## Phase 6 — Regression Testing
 
 Store baseline scores.
