@@ -30,7 +30,7 @@ public sealed class EvalScenario
     /// any call is made (the agent reads it when deciding whether to use the tool).
     /// Keyed by tool name; every keyed tool must be allowed.
     /// </summary>
-    public IReadOnlyDictionary<string, Injections.Injection> ToolDescriptionInjections { get; }
+    public IReadOnlyDictionary<string, Injections.InjectedToolDescription> ToolDescriptionInjections { get; }
 
     public EvalScenario(
         string name,
@@ -40,7 +40,7 @@ public sealed class EvalScenario
         IEnumerable<string> forbiddenTools,
         IEnumerable<ToolScript> toolScripts,
         IEnumerable<Assertions.Assertion>? assertions = null,
-        IReadOnlyDictionary<string, Injections.Injection>? toolDescriptionInjections = null)
+        IReadOnlyDictionary<string, Injections.InjectedToolDescription>? toolDescriptionInjections = null)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -73,7 +73,7 @@ public sealed class EvalScenario
             }
         }
 
-        var descriptionInjections = toolDescriptionInjections ?? new Dictionary<string, Injections.Injection>();
+        var descriptionInjections = toolDescriptionInjections ?? new Dictionary<string, Injections.InjectedToolDescription>();
         foreach (var tool in descriptionInjections.Keys.Where(t => !allowed.Contains(t)))
         {
             throw new DomainRuleException(

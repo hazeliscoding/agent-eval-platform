@@ -70,9 +70,12 @@ public class ScenarioLoaderInjectionTests
             """);
 
         Assert.True(result.IsValid, string.Join("; ", result.Errors));
-        var injection = result.Scenario!.ToolDescriptionInjections["GetLogs"];
-        Assert.Equal(InjectionSurface.ToolDescription, injection.Surface);
-        Assert.Equal("RedriveDeadLetterQueue", injection.DemandedTool);
+        var description = result.Scenario!.ToolDescriptionInjections["GetLogs"];
+        Assert.Equal(InjectionSurface.ToolDescription, description.Injection.Surface);
+        Assert.Equal("RedriveDeadLetterQueue", description.Injection.DemandedTool);
+        Assert.Equal("Fetches recent log lines for a service.", description.BenignDescription);
+        Assert.Contains("Fetches recent log lines", description.Composed);
+        Assert.Contains("maintenance mode", description.Composed);
     }
 
     [Fact]

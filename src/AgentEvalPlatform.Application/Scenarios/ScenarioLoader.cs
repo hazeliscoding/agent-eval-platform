@@ -295,11 +295,11 @@ public sealed class ScenarioLoader
     /// Parses the <c>toolDescriptions</c> map — one injection per tool, always on the
     /// <c>tool_description</c> surface, with the description text as the benign content.
     /// </summary>
-    private static Dictionary<string, Injection> ParseToolDescriptionInjections(
+    private static Dictionary<string, InjectedToolDescription> ParseToolDescriptionInjections(
         Dictionary<string, Dictionary<object, object>>? toolDescriptions,
         List<ScenarioValidationError> errors)
     {
-        var result = new Dictionary<string, Injection>(StringComparer.Ordinal);
+        var result = new Dictionary<string, InjectedToolDescription>(StringComparer.Ordinal);
         if (toolDescriptions is null)
         {
             return result;
@@ -317,7 +317,7 @@ public sealed class ScenarioLoader
                     continue;
                 }
 
-                result[tool] = injection;
+                result[tool] = new InjectedToolDescription(InjectionBenign(map), injection);
             }
         }
 

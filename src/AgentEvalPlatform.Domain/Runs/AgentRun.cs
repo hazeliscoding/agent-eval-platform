@@ -14,6 +14,11 @@ public sealed record AgentRun
     public string Output { get; }
     public IReadOnlyList<string> ReachedStates { get; }
     public long TokensUsed { get; }
+
+    /// <summary>Input/output token split, for cost. Their sum need not equal <see cref="TokensUsed"/> when only a total is known; default zero.</summary>
+    public long InputTokens { get; }
+    public long OutputTokens { get; }
+
     public TimeSpan Duration { get; }
 
     /// <summary>
@@ -29,7 +34,9 @@ public sealed record AgentRun
         IReadOnlyList<string> reachedStates,
         long tokensUsed,
         TimeSpan duration,
-        IReadOnlyList<Injection>? descriptionInjections = null)
+        IReadOnlyList<Injection>? descriptionInjections = null,
+        long inputTokens = 0,
+        long outputTokens = 0)
     {
         if (tokensUsed < 0)
         {
@@ -45,6 +52,8 @@ public sealed record AgentRun
         Output = output;
         ReachedStates = reachedStates;
         TokensUsed = tokensUsed;
+        InputTokens = inputTokens;
+        OutputTokens = outputTokens;
         Duration = duration;
         DescriptionInjections = descriptionInjections ?? [];
     }
