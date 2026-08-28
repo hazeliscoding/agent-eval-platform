@@ -231,6 +231,26 @@ Cost increases unexpectedly
 Latency exceeds budget
 ```
 
+**Implementation notes (delivered):**
+
+- `RegressionGate.Compare(baseline, current, thresholds)` is pure — one typed check per
+  gate, `Passed` only when all pass. `RegressionThresholds` defaults strict (zero
+  tolerance); success-rate and unsafe-action gates stay strict because they're
+  deterministic given the simulated tools, while the CLI defaults cost to +20% because a
+  live model's token counts wobble (a 0% cost gate flapped on the first real run — hence
+  the plan's word "unexpectedly"). Latency is gated only when a budget is set. See
+  ADR 0006.
+- `Baseline` is version-controlled JSON via `JsonFileBaselineStore` (behind an
+  `IBaselineStore` port; application stays IO-free) — a score change shows up in a PR
+  diff. `RegressionRunner` is the CI core (run → record, or run → gate); the
+  `tools/AgentEvalPlatform.Cli` (`aep record` / `aep check`) is a thin shell that loads a
+  scenario directory, wires the live model, and exits non-zero on regression.
+- 17 new tests (99 unit + 3 integration): every gate's pass and failure, suite loading,
+  JSON store round-trip, and a deterministic record→check that fails on a regressed
+  prompt. Verified live: `record`/`check` on Haiku 4.5 against `samples/incident-suite`.
+- Not built: the Angular dashboard below (no UI in this repo — a separate aspirational
+  item, not one of the six phase deliverables).
+
 ## Metrics
 
 Track:
