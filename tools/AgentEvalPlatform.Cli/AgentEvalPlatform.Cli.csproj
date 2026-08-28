@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>AgentEvalPlatform.Cli</RootNamespace>
+    <AssemblyName>aep</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AgentEvalPlatform.Application\AgentEvalPlatform.Application.csproj" />
+    <ProjectReference Include="..\..\src\AgentEvalPlatform.Infrastructure\AgentEvalPlatform.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
