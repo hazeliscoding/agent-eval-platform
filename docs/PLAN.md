@@ -280,6 +280,21 @@ Show:
 - Latency.
 - Security failures.
 
+**Implementation notes (delivered):**
+
+- A static Angular SPA (`src/aep-dashboard`) that fetches one `dataset.json` and renders
+  it — no API, no database, true to the platform's "no service to host" design. Views:
+  per-configuration score cards, a scenario × configuration pass/fail matrix with
+  regression highlighting, a per-scenario detail (assertion verdicts, tool usage, and the
+  security signals — unauthorized calls and obeyed injections), and an inline-SVG
+  success-rate trend. Hand-crafted SCSS, no component-framework dependency. See ADR 0007.
+- The data contract is a C# DTO (`Application/Reporting/Dashboard`), emitted by
+  `aep compare` for live runs and by `tools/AgentEvalPlatform.SampleData` — a deterministic
+  generator (mirroring incident-control-plane's DemoSeeder) that produces the committed
+  demo dataset, encoding a prompt regression so the dashboard shows injection compliance
+  side-by-side. A round-trip test pins the JSON schema.
+- 3 new tests (105 total). Screenshots in `docs/screenshots/`.
+
 ## Portfolio Demo
 
 Introduce an intentionally bad prompt update.

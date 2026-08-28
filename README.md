@@ -28,6 +28,35 @@ Timeouts are reported, never slept, so whole suites run in milliseconds. A scrip
 runs dry fails loudly rather than repeating itself. See
 [ADR 0001](docs/adr/0001-scenarios-as-data-and-deterministic-simulator.md).
 
+## Dashboard 📊
+
+A static Angular SPA renders the platform's own output — no API, no database, just a
+`dataset.json` the tooling writes. It shows per-configuration scores, a scenario pass/fail
+matrix with regressions highlighted, a per-scenario detail (assertion verdicts, tool
+usage, and security signals — unauthorized calls and obeyed injections), and a success-rate
+trend. See [ADR 0007](docs/adr/0007-static-dashboard.md).
+
+<p align="center">
+  <img src="docs/screenshots/dashboard-overview.png" width="820" alt="Dashboard: score cards, scenario matrix, trend, and the regressed scenario's detail" />
+</p>
+
+The detail view puts the two configurations side by side — the cautious prompt resists an
+injected instruction, the aggressive one obeys it and trips the safety assertions:
+
+<p align="center">
+  <img src="docs/screenshots/dashboard-scenario-detail.png" width="820" alt="Scenario detail: cautious resists the injection, aggressive complies" />
+</p>
+
+```bash
+# Generate the committed demo dataset (deterministic, no API key):
+dotnet run --project tools/AgentEvalPlatform.SampleData
+
+# Serve the dashboard:
+cd src/aep-dashboard && npm install && npm start   # http://localhost:4200
+```
+
+`aep compare` emits the same dataset shape for real (live-model) runs.
+
 ## Regression testing in CI
 
 Record a suite's score as a baseline, then fail CI when a later run regresses. The gate
@@ -101,8 +130,9 @@ dotnet test   # domain invariants, replay semantics, assertion verdicts, YAML lo
 
 ## Status ✅
 
-Build complete — all six phases delivered. See [docs/PLAN.md](docs/PLAN.md) for the phased
-build plan and [docs/adr/](docs/adr/) for the decisions.
+Build complete — all six phases delivered, plus the static dashboard. See
+[docs/PLAN.md](docs/PLAN.md) for the phased build plan and [docs/adr/](docs/adr/) for the
+decisions.
 
 - [x] Phase 1 — Deterministic tool simulator (YAML scenarios, scripted responses, refusal-recording transcript)
 - [x] Phase 2 — Assertions (AgentRun artifact, typed assertion union, schema validation, YAML parsing)
